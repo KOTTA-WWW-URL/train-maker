@@ -49,7 +49,11 @@ function regroup(){stGs=[];lnGs=[];stOf={};lnOf={};const sS={},sL={};
  const ks=Object.keys(grid).sort((a,b)=>{const p=a.split(',').map(Number),q=b.split(',').map(Number);return p[1]-q[1]||p[0]-q[0]});
  for(const k of ks){const[x,y]=k.split(',').map(Number),c=grid[k];
   if(c.t=='s'&&!sS[k]){const cells=flood(x,y,sS,n=>n.t=='s'),g={cells,name:''};for(const[a,b]of cells){stOf[K(a,b)]=g;const n=grid[K(a,b)].n;if(n&&!g.name)g.name=n}stGs.push(g)}
-  else if(c.t=='r'&&!sL[k]){const cells=flood(x,y,sL,(n,a,b,d)=>n.t=='r'&&link(a,b,d)),g={cells,name:''};for(const[a,b]of cells){lnOf[K(a,b)]=g;const n=grid[K(a,b)].ln;if(n&&!g.name)g.name=n}lnGs.push(g)}}
+  if((c.t=='r'||c.e)&&!sL[k]){const cells=flood(x,y,sL,(n,a,b,d)=>(n.t=='r'||n.e)&&link(a,b,d)),g={cells,name:''};for(const[a,b]of cells){lnOf[K(a,b)]=g;const n=grid[K(a,b)].ln;if(n&&!g.name)g.name=n}lnGs.push(g)}}
+ const used={};for(const g of lnGs){const cnt={};for(const[a,b]of g.cells){const ci=grid[K(a,b)].ci;if(ci!=null)cnt[ci]=(cnt[ci]||0)+1}
+  let best=null,bn=0;for(const c in cnt)if(cnt[c]>bn&&!used[c]){best=+c;bn=cnt[c]}
+  if(best==null){best=0;while(used[best])best++}
+  used[best]=1;g.ci=best;for(const[a,b]of g.cells)grid[K(a,b)].ci=best}
  dirty=false}
 function msg(t){$('msg').textContent=t;clearTimeout(msg.t);if(t)msg.t=setTimeout(()=>$('msg').textContent='',4000)}
 function autosave(){try{localStorage.setItem('densha-life',JSON.stringify(grid))}catch(e){}}
@@ -61,14 +65,15 @@ try{const s=localStorage.getItem('densha-life');if(s)grid=JSON.parse(s);else dem
 if(!Object.keys(grid).length)demo();
 
 /* ---------- 描画 ---------- */
+const PAL=Array.from({length:200},(_,i)=>`hsl(${(i*137.508)%360} ${55+(i%3)*15}% ${36+(Math.floor(i/3)%4)*7}%)`),pal=i=>PAL[i%200];
 const hue=n=>{let h=0;for(const c of n)h=(h*31+c.charCodeAt(0))%360;return h};
 const P=(x,y,d)=>[x*S+S/2+DX[d]*S/2,y*S+S/2+DY[d]*S/2];
 function rr(a,b,w,h,r){ctx.beginPath();ctx.roundRect?ctx.roundRect(a,b,w,h,r):ctx.rect(a,b,w,h)}
-function drawRail(x,y,c,al){ctx.globalAlpha=al;ctx.lineCap='round';const a=P(x,y,c.e[0]),b=P(x,y,c.e[1]);
+function drawRail(x,y,c,al,ps){ctx.globalAlpha=al;ctx.lineCap='round';const a=P(x,y,c.e[0]),b=P(x,y,c.e[1]);
  ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.quadraticCurveTo(x*S+S/2,y*S+S/2,b[0],b[1]);
- ctx.strokeStyle=c.ln?`hsl(${hue(c.ln)} 55% 45%)`:'#7d7466';ctx.lineWidth=13;ctx.stroke();
- ctx.strokeStyle='#f4f4f4';ctx.lineWidth=4;ctx.stroke();ctx.globalAlpha=1}
-function drawSt(x,y,al){ctx.globalAlpha=al;rr(x*S+3,y*S+3,S-6,S-6,6);ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle='#c0392b';ctx.lineWidth=3;ctx.stroke();
+ if(ps!==1){ctx.strokeStyle=c.ci!=null?pal(c.ci):'#7d7466';ctx.lineWidth=13;ctx.stroke()}
+ if(ps!==0){ctx.strokeStyle='#f4f4f4';ctx.lineWidth=4;ctx.stroke()}ctx.globalAlpha=1}
+function drawSt(x,y,al){const c=at(x,y),th=c&&c.e,m=th?8:3;ctx.globalAlpha=al;rr(x*S+m,y*S+m,S-2*m,S-2*m,6);ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle=th&&c.ci!=null?pal(c.ci):'#c0392b';ctx.lineWidth=3;ctx.stroke();
  ctx.fillStyle='#c0392b';ctx.font='bold 14px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('駅',x*S+S/2,y*S+S/2+1);ctx.globalAlpha=1}
 function drawGroup(g){if(g.cells.length<2){drawSt(g.cells[0][0],g.cells[0][1],1);return}
  const has=(x,y)=>stOf[K(x,y)]===g;
@@ -92,9 +97,11 @@ function draw(time){
  if(dirty)regroup();
  ctx.fillStyle='rgba(128,128,128,.08)';ctx.fillRect(0,0,W*S,H*S);ctx.strokeStyle='rgba(128,128,128,.22)';ctx.lineWidth=1;ctx.beginPath();
  for(let i=0;i<=W;i++){ctx.moveTo(i*S,0);ctx.lineTo(i*S,H*S)}for(let j=0;j<=H;j++){ctx.moveTo(0,j*S);ctx.lineTo(W*S,j*S)}ctx.stroke();
- for(const k in grid){const c=grid[k];if(c.e){const[x,y]=k.split(',').map(Number);drawRail(x,y,c,1)}}
+ for(const ps of[0,1])for(const k in grid){const c=grid[k];if(c.e){const[x,y]=k.split(',').map(Number);drawRail(x,y,c,1,ps)}}
  for(const g of stGs)drawGroup(g);
- for(const g of lnGs)if(g.name){const[x,y]=g.cells[g.cells.length>>1];label(g.name,x*S+S/2,y*S+S/2,`hsl(${hue(g.name)} 55% 45%)`)}
+ 
+ 
+ for(const g of lnGs)if(g.name){const[x,y]=g.cells[g.cells.length>>1];label(g.name,x*S+S/2,y*S+S/2,pal(g.ci))}
  for(const g of stGs)if(g.name){const[x,y]=g.cells[0];label(g.name,x*S+S/2,y*S-8,'#c0392b')}
  if(mode=='edit'&&hover&&!['er','nm','pan'].includes(tool)){const[x,y]=hover;if(tool=='st')drawSt(x,y,.5);else drawRail(x,y,{e:tool=='c'?CURVES[cvi]:PIECE[tool]},.5)}
  if(mode=='pick'){ctx.strokeStyle='#f5a623';ctx.lineWidth=3+Math.sin(time/150)*1.5;for(const k in grid)if(grid[k].t=='s'){const[x,y]=k.split(',').map(Number);rr(x*S,y*S,S,S,8);ctx.stroke()}}
@@ -138,8 +145,8 @@ function apply(x,y,first){if(x<0||y<0||x>=W||y>=H)return;const k=K(x,y),old=grid
  else if(tool=='nm'){if(!first||!old)return;const n=$('nm').value.trim();if(dirty)regroup();
   if(old.t=='s'){for(const[a,b]of stOf[k].cells)grid[K(a,b)].n=n;msg(n?'駅名を「'+n+'」にしました':'駅名を消しました')}
   else{for(const[a,b]of lnOf[k].cells)grid[K(a,b)].ln=n;msg(n?'路線名を「'+n+'」にしました':'路線名を消しました')}dirty=true}
- else if(tool=='st'){const n={t:'s',n:old&&old.t=='s'?old.n:''};if(old&&old.e){n.e=old.e;n.ln=old.ln||''}grid[k]=n;dirty=true}
- else if(tool!='pan'){grid[k]={t:'r',e:tool=='c'?CURVES[cvi]:PIECE[tool],ln:old&&old.t=='r'?old.ln:''};dirty=true}}
+ else if(tool=='st'){const n={t:'s',n:old&&old.t=='s'?old.n:''};if(old&&old.e){n.e=old.e;n.ln=old.ln||'';n.ci=old.ci}grid[k]=n;dirty=true}
+ else if(tool!='pan'){grid[k]={t:'r',e:tool=='c'?CURVES[cvi]:PIECE[tool],ln:old&&old.t=='r'?old.ln:'',ci:old?old.ci:undefined};dirty=true}}
 let down=false,lc='',lx=0,ly=0;
 cvs.onpointerdown=e=>{cvs.setPointerCapture(e.pointerId);const[x,y]=cell(e);
  if(mode=='pick'){const c=at(x,y);if(c&&c.t=='s')startRide(x,y);return}
