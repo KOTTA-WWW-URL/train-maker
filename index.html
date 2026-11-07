@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>でんしゃライフ</title>
+<title>Train-Maker</title>
 <style>
 :root{--bg:#f6f3ea;--fg:#222;--bar:#fff;--bd:#d8d2c0;--bt:#f0ece0;--ac:#2a7de1;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1c1d20;--fg:#eee;--bar:#26282c;--bd:#3a3d44;--bt:#32353b}}
@@ -33,7 +33,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
 </div>
 <div id="wrap"><canvas id="c"></canvas><div id="msg"></div><div id="hud"></div></div>
 <script>
-const S=40,W=30,H=18;
+const S=40,W=60,H=36;
 const DX=[0,1,1,1,0,-1,-1,-1],DY=[-1,-1,0,1,1,1,0,-1],ALL=[0,1,2,3,4,5,6,7];
 const CURVES=[[0,2],[2,4],[4,6],[6,0]];for(let d=0;d<8;d++)CURVES.push([d,(d+3)%8]);
 const PIECE={h:[2,6],v:[0,4],d1:[1,5],d2:[7,3]};
@@ -42,7 +42,7 @@ const cvs=$('c'),ctx=cvs.getContext('2d');
 let grid={},tool='h',cvi=0,mode='edit',dirty=true,hover=null,tr=null,turn=0,paused=false,zoom=1.8;
 let cw=1,ch=1,dpr=1,E={s:1,ox:0,oy:0},R={s:1.8,ox:0,oy:0},stGs=[],lnGs=[],stOf={},lnOf={},clr=0;
 const at=(x,y)=>grid[K(x,y)];
-const ends=c=>!c?[]:c.t=='s'?ALL:c.e;
+const ends=c=>!c?[]:c.t=='s'?(c.e||ALL):c.e;
 function link(x,y,d){const c=at(x,y);if(!c||!ends(c).includes(d))return false;const n=at(x+DX[d],y+DY[d]);return !!n&&ends(n).includes((d+4)%8)}
 function flood(x,y,seen,ok){const out=[],st=[[x,y]];seen[K(x,y)]=1;while(st.length){const[a,b]=st.pop();out.push([a,b]);for(const d of ALL){const nx=a+DX[d],ny=b+DY[d],k=K(nx,ny),c=grid[k];if(seen[k]||!c||!ok(c,a,b,d))continue;seen[k]=1;st.push([nx,ny])}}return out}
 function regroup(){stGs=[];lnGs=[];stOf={};lnOf={};const sS={},sL={};
@@ -70,6 +70,17 @@ function drawRail(x,y,c,al){ctx.globalAlpha=al;ctx.lineCap='round';const a=P(x,y
  ctx.strokeStyle='#f4f4f4';ctx.lineWidth=4;ctx.stroke();ctx.globalAlpha=1}
 function drawSt(x,y,al){ctx.globalAlpha=al;rr(x*S+3,y*S+3,S-6,S-6,6);ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle='#c0392b';ctx.lineWidth=3;ctx.stroke();
  ctx.fillStyle='#c0392b';ctx.font='bold 14px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('駅',x*S+S/2,y*S+S/2+1);ctx.globalAlpha=1}
+function drawGroup(g){if(g.cells.length<2){drawSt(g.cells[0][0],g.cells[0][1],1);return}
+ const has=(x,y)=>stOf[K(x,y)]===g;
+ for(const pass of[0,1]){const m=pass?4:1,col=pass?'#fff3cf':'#c0392b';ctx.fillStyle=col;ctx.strokeStyle=col;ctx.lineCap='butt';
+  for(const[x,y]of g.cells){rr(x*S+m,y*S+m,S-2*m,S-2*m,8);ctx.fill();
+   if(has(x+1,y))ctx.fillRect(x*S+S/2,y*S+m,S,S-2*m);
+   if(has(x,y+1))ctx.fillRect(x*S+m,y*S+S/2,S-2*m,S);
+   ctx.lineWidth=S-2*m-10;
+   if(has(x+1,y+1)){ctx.beginPath();ctx.moveTo(x*S+S/2,y*S+S/2);ctx.lineTo(x*S+S*1.5,y*S+S*1.5);ctx.stroke()}
+   if(has(x-1,y+1)){ctx.beginPath();ctx.moveTo(x*S+S/2,y*S+S/2);ctx.lineTo(x*S-S/2,y*S+S*1.5);ctx.stroke()}}}
+ ctx.fillStyle='#c0392b';ctx.font='bold 14px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+ for(const[x,y]of g.cells)ctx.fillText('駅',x*S+S/2,y*S+S/2+1)}
 function label(t,cx,cy,col){ctx.font='bold 12px system-ui,sans-serif';const w=ctx.measureText(t).width+10;rr(cx-w/2,cy-9,w,18,9);ctx.fillStyle='rgba(255,255,255,.93)';ctx.fill();ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.stroke();ctx.fillStyle='#222';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(t,cx,cy+.5)}
 function pos(c,x,y,from,to,t){const cx=x*S+S/2,cy=y*S+S/2,a=P(x,y,from),b=P(x,y,to);
  if(c.t=='s')return t<.5?[a[0]+(cx-a[0])*t*2,a[1]+(cy-a[1])*t*2]:[cx+(b[0]-cx)*(t-.5)*2,cy+(b[1]-cy)*(t-.5)*2];
@@ -81,8 +92,8 @@ function draw(time){
  if(dirty)regroup();
  ctx.fillStyle='rgba(128,128,128,.08)';ctx.fillRect(0,0,W*S,H*S);ctx.strokeStyle='rgba(128,128,128,.22)';ctx.lineWidth=1;ctx.beginPath();
  for(let i=0;i<=W;i++){ctx.moveTo(i*S,0);ctx.lineTo(i*S,H*S)}for(let j=0;j<=H;j++){ctx.moveTo(0,j*S);ctx.lineTo(W*S,j*S)}ctx.stroke();
- for(const k in grid){const c=grid[k];if(c.t=='r'){const[x,y]=k.split(',').map(Number);drawRail(x,y,c,1)}}
- for(const k in grid){const c=grid[k];if(c.t=='s'){const[x,y]=k.split(',').map(Number);drawSt(x,y,1)}}
+ for(const k in grid){const c=grid[k];if(c.e){const[x,y]=k.split(',').map(Number);drawRail(x,y,c,1)}}
+ for(const g of stGs)drawGroup(g);
  for(const g of lnGs)if(g.name){const[x,y]=g.cells[g.cells.length>>1];label(g.name,x*S+S/2,y*S+S/2,`hsl(${hue(g.name)} 55% 45%)`)}
  for(const g of stGs)if(g.name){const[x,y]=g.cells[0];label(g.name,x*S+S/2,y*S-8,'#c0392b')}
  if(mode=='edit'&&hover&&!['er','nm','pan'].includes(tool)){const[x,y]=hover;if(tool=='st')drawSt(x,y,.5);else drawRail(x,y,{e:tool=='c'?CURVES[cvi]:PIECE[tool]},.5)}
@@ -127,7 +138,7 @@ function apply(x,y,first){if(x<0||y<0||x>=W||y>=H)return;const k=K(x,y),old=grid
  else if(tool=='nm'){if(!first||!old)return;const n=$('nm').value.trim();if(dirty)regroup();
   if(old.t=='s'){for(const[a,b]of stOf[k].cells)grid[K(a,b)].n=n;msg(n?'駅名を「'+n+'」にしました':'駅名を消しました')}
   else{for(const[a,b]of lnOf[k].cells)grid[K(a,b)].ln=n;msg(n?'路線名を「'+n+'」にしました':'路線名を消しました')}dirty=true}
- else if(tool=='st'){grid[k]={t:'s',n:old&&old.t=='s'?old.n:''};dirty=true}
+ else if(tool=='st'){const n={t:'s',n:old&&old.t=='s'?old.n:''};if(old&&old.e){n.e=old.e;n.ln=old.ln||''}grid[k]=n;dirty=true}
  else if(tool!='pan'){grid[k]={t:'r',e:tool=='c'?CURVES[cvi]:PIECE[tool],ln:old&&old.t=='r'?old.ln:''};dirty=true}}
 let down=false,lc='',lx=0,ly=0;
 cvs.onpointerdown=e=>{cvs.setPointerCapture(e.pointerId);const[x,y]=cell(e);
@@ -138,15 +149,15 @@ cvs.onpointermove=e=>{const[x,y]=cell(e);hover=[x,y];if(!down)return;
 cvs.onpointerup=()=>{if(down)autosave();down=false};cvs.onpointerleave=()=>hover=null;
 cvs.addEventListener('wheel',e=>{e.preventDefault();const f=Math.exp(-e.deltaY*.0012);
  if(mode=='ride')R.s=Math.min(4,Math.max(.6,R.s*f));else{const r=cvs.getBoundingClientRect();zoomAt(f,e.clientX-r.left,e.clientY-r.top)}},{passive:false});
-function zoomAt(f,px,py){const wx=(px-E.ox)/E.s,wy=(py-E.oy)/E.s;E.s=Math.min(4,Math.max(.2,E.s*f));E.ox=px-wx*E.s;E.oy=py-wy*E.s}
-function fit(){const s=Math.min(cw/(W*S),ch/(H*S));E.s=s;E.ox=(cw-W*S*s)/2;E.oy=(ch-H*S*s)/2}
+function zoomAt(f,px,py){const wx=(px-E.ox)/E.s,wy=(py-E.oy)/E.s;E.s=Math.min(4,Math.max(.1,E.s*f));E.ox=px-wx*E.s;E.oy=py-wy*E.s}
+function fit(all){if(all){const s=Math.min(cw/(W*S),ch/(H*S));E.s=s;E.ox=(cw-W*S*s)/2;E.oy=(ch-H*S*s)/2}else{E.s=Math.min(cw/(30*S),ch/(18*S));E.ox=0;E.oy=0}}
 function resize(){dpr=window.devicePixelRatio||1;const w=$('wrap');cw=w.clientWidth;ch=w.clientHeight;cvs.width=cw*dpr;cvs.height=ch*dpr;if(!resize.done||mode=='edit'&&!resize.user){fit();resize.done=1}}
 addEventListener('resize',()=>{resize.user=0;resize()});
 function setTool(t){tool=t;document.querySelectorAll('[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t==t));if(t=='nm'){$('nm').focus();msg('名前を入力して、駅(駅名)や線路(路線名)をクリック')}}
 document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>setTool(b.dataset.t));
 function rot(){cvi=(cvi+1)%CURVES.length;$('bc').textContent='カーブ '+(cvi+1)+'/'+CURVES.length;setTool('c')}
 $('rot').onclick=rot;
-$('zi').onclick=()=>{resize.user=1;zoomAt(1.25,cw/2,ch/2)};$('zo').onclick=()=>{resize.user=1;zoomAt(.8,cw/2,ch/2)};$('zf').onclick=()=>{resize.user=0;fit()};
+$('zi').onclick=()=>{resize.user=1;zoomAt(1.25,cw/2,ch/2)};$('zo').onclick=()=>{resize.user=1;zoomAt(.8,cw/2,ch/2)};$('zf').onclick=()=>{resize.user=1;fit(true)};
 function setTurn(t){turn=t;$('tl').classList.toggle('on',t<0);$('ts').classList.toggle('on',t==0);$('tr').classList.toggle('on',t>0)}
 $('tl').onclick=()=>setTurn(-1);$('ts').onclick=()=>setTurn(0);$('tr').onclick=()=>setTurn(1);setTurn(0);
 function togglePause(){paused=!paused;$('ps').textContent=paused?'▶ 再開':'⏸ 停止'}
