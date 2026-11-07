@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>でんしゃライフ</title>
+<style>
+:root{--bg:#f6f3ea;--fg:#222;--bar:#fff;--bd:#d8d2c0;--bt:#f0ece0;--ac:#2a7de1;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1c1d20;--fg:#eee;--bar:#26282c;--bd:#3a3d44;--bt:#32353b}}
+:root[data-theme="dark"]{--bg:#1c1d20;--fg:#eee;--bar:#26282c;--bd:#3a3d44;--bt:#32353b}
+html,body{height:100%;margin:0}
+body{display:flex;flex-direction:column;background:var(--bg);color:var(--fg);font-family:system-ui,"Hiragino Sans","Noto Sans JP",sans-serif;font-size:14px}
+.bar{display:flex;flex-wrap:wrap;gap:4px;padding:6px;background:var(--bar);border-bottom:1px solid var(--bd);align-items:center}
+button,select,input{font:inherit;color:var(--fg);background:var(--bt);border:1px solid var(--bd);border-radius:6px;padding:5px 8px}
+button{cursor:pointer}button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+input[type=text]{width:8em}.sp{width:8px}
+#wrap{flex:1;position:relative;min-height:0}
+canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+#msg,#hud{position:absolute;left:8px;right:8px;pointer-events:none;padding:6px 10px;border-radius:8px;background:rgba(20,20,20,.72);color:#fff;width:fit-content;max-width:calc(100% - 16px)}
+#msg{top:8px}#hud{bottom:8px}#msg:empty,#hud:empty{display:none}
+</style></head><body>
+<div class="bar" id="ed">
+<button data-t="h">━ 横</button><button data-t="v">┃ 縦</button><button data-t="d1">／ 斜め</button><button data-t="d2">＼ 斜め</button>
+<button data-t="c" id="bc">カーブ 1/12</button><button id="rot">回転(R)</button><button data-t="st">駅</button>
+<button data-t="nm">名前ブロック</button><input type="text" id="nm" placeholder="名前を入力">
+<button data-t="er">消しゴム</button><button data-t="pan">手(移動)</button>
+<button id="zi">＋</button><button id="zo">－</button><button id="zf">全体</button><span class="sp"></span>
+<button id="sv">保存</button><button id="ld">読込</button><button id="cl">全消去</button><button id="go">▶ 開始</button>
+<input type="file" id="fi" accept=".json,application/json" hidden>
+</div>
+<div class="bar" id="rd" hidden>
+<button id="tl">◀ 左</button><button id="ts">▲ 直進</button><button id="tr">右 ▶</button><button id="ps">⏸ 停止</button>
+<label>速度 <input type="range" id="sp" min="1" max="8" step="0.5" value="3"></label>
+<label>tp <select id="tp"></select></label><button id="en">■ 降りる</button>
+</div>
+<div id="wrap"><canvas id="c"></canvas><div id="msg"></div><div id="hud"></div></div>
+<script>
+const S=40,W=30,H=18;
+const DX=[0,1,1,1,0,-1,-1,-1],DY=[-1,-1,0,1,1,1,0,-1],ALL=[0,1,2,3,4,5,6,7];
+const CURVES=[[0,2],[2,4],[4,6],[6,0]];for(let d=0;d<8;d++)CURVES.push([d,(d+3)%8]);
+const PIECE={h:[2,6],v:[0,4],d1:[1,5],d2:[7,3]};
+const $=id=>document.getElementById(id),K=(x,y)=>x+','+y;
+const cvs=$('c'),ctx=cvs.getContext('2d');
+let grid={},tool='h',cvi=0,mode='edit',dirty=true,hover=null,tr=null,turn=0,paused=false,zoom=1.8;
+let cw=1,ch=1,dpr=1,E={s:1,ox:0,oy:0},R={s:1.8,ox:0,oy:0},stGs=[],lnGs=[],stOf={},lnOf={},clr=0;
+const at=(x,y)=>grid[K(x,y)];
+const ends=c=>!c?[]:c.t=='s'?ALL:c.e;
+function link(x,y,d){const c=at(x,y);if(!c||!ends(c).includes(d))return false;const n=at(x+DX[d],y+DY[d]);return !!n&&ends(n).includes((d+4)%8)}
+function flood(x,y,seen,ok){const out=[],st=[[x,y]];seen[K(x,y)]=1;while(st.length){const[a,b]=st.pop();out.push([a,b]);for(const d of ALL){const nx=a+DX[d],ny=b+DY[d],k=K(nx,ny),c=grid[k];if(seen[k]||!c||!ok(c,a,b,d))continue;seen[k]=1;st.push([nx,ny])}}return out}
+function regroup(){stGs=[];lnGs=[];stOf={};lnOf={};const sS={},sL={};
+ const ks=Object.keys(grid).sort((a,b)=>{const p=a.split(',').map(Number),q=b.split(',').map(Number);return p[1]-q[1]||p[0]-q[0]});
+ for(const k of ks){const[x,y]=k.split(',').map(Number),c=grid[k];
+  if(c.t=='s'&&!sS[k]){const cells=flood(x,y,sS,n=>n.t=='s'),g={cells,name:''};for(const[a,b]of cells){stOf[K(a,b)]=g;const n=grid[K(a,b)].n;if(n&&!g.name)g.name=n}stGs.push(g)}
+  else if(c.t=='r'&&!sL[k]){const cells=flood(x,y,sL,(n,a,b,d)=>n.t=='r'&&link(a,b,d)),g={cells,name:''};for(const[a,b]of cells){lnOf[K(a,b)]=g;const n=grid[K(a,b)].ln;if(n&&!g.name)g.name=n}lnGs.push(g)}}
+ dirty=false}
+function msg(t){$('msg').textContent=t;clearTimeout(msg.t);if(t)msg.t=setTimeout(()=>$('msg').textContent='',4000)}
+function autosave(){try{localStorage.setItem('densha-life',JSON.stringify(grid))}catch(e){}}
+function demo(){grid={};const r=(x,y,e)=>grid[K(x,y)]={t:'r',e,ln:'環状線'};
+ for(let x=7;x<20;x++){r(x,5,[2,6]);r(x,12,[2,6])}for(let y=6;y<12;y++){r(6,y,[0,4]);r(20,y,[0,4])}
+ r(6,5,[2,4]);r(20,5,[4,6]);r(20,12,[0,6]);r(6,12,[0,2]);
+ grid[K(12,5)]={t:'s',n:'中央駅'};grid[K(15,12)]={t:'s',n:'海浜駅'};dirty=true}
+try{const s=localStorage.getItem('densha-life');if(s)grid=JSON.parse(s);else demo()}catch(e){demo()}
+if(!Object.keys(grid).length)demo();
+
+/* ---------- 描画 ---------- */
+const hue=n=>{let h=0;for(const c of n)h=(h*31+c.charCodeAt(0))%360;return h};
+const P=(x,y,d)=>[x*S+S/2+DX[d]*S/2,y*S+S/2+DY[d]*S/2];
+function rr(a,b,w,h,r){ctx.beginPath();ctx.roundRect?ctx.roundRect(a,b,w,h,r):ctx.rect(a,b,w,h)}
+function drawRail(x,y,c,al){ctx.globalAlpha=al;ctx.lineCap='round';const a=P(x,y,c.e[0]),b=P(x,y,c.e[1]);
+ ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.quadraticCurveTo(x*S+S/2,y*S+S/2,b[0],b[1]);
+ ctx.strokeStyle=c.ln?`hsl(${hue(c.ln)} 55% 45%)`:'#7d7466';ctx.lineWidth=13;ctx.stroke();
+ ctx.strokeStyle='#f4f4f4';ctx.lineWidth=4;ctx.stroke();ctx.globalAlpha=1}
+function drawSt(x,y,al){ctx.globalAlpha=al;rr(x*S+3,y*S+3,S-6,S-6,6);ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle='#c0392b';ctx.lineWidth=3;ctx.stroke();
+ ctx.fillStyle='#c0392b';ctx.font='bold 14px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('駅',x*S+S/2,y*S+S/2+1);ctx.globalAlpha=1}
+function label(t,cx,cy,col){ctx.font='bold 12px system-ui,sans-serif';const w=ctx.measureText(t).width+10;rr(cx-w/2,cy-9,w,18,9);ctx.fillStyle='rgba(255,255,255,.93)';ctx.fill();ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.stroke();ctx.fillStyle='#222';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(t,cx,cy+.5)}
+function pos(c,x,y,from,to,t){const cx=x*S+S/2,cy=y*S+S/2,a=P(x,y,from),b=P(x,y,to);
+ if(c.t=='s')return t<.5?[a[0]+(cx-a[0])*t*2,a[1]+(cy-a[1])*t*2]:[cx+(b[0]-cx)*(t-.5)*2,cy+(b[1]-cy)*(t-.5)*2];
+ const u=1-t;return[u*u*a[0]+2*u*t*cx+t*t*b[0],u*u*a[1]+2*u*t*cy+t*t*b[1]]}
+function pointAt(dist){let a=[tr.px,tr.py];for(const b of tr.trail){const s=Math.hypot(a[0]-b[0],a[1]-b[1]);if(s>=dist&&s>0){const k=dist/s;return[a[0]+(b[0]-a[0])*k,a[1]+(b[1]-a[1])*k]}dist-=s;a=b}return a}
+function draw(time){
+ const cs=getComputedStyle(document.documentElement);ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle=cs.getPropertyValue('--bg');ctx.fillRect(0,0,cw,ch);
+ const cam=mode=='ride'?R:E;ctx.setTransform(dpr*cam.s,0,0,dpr*cam.s,dpr*cam.ox,dpr*cam.oy);
+ if(dirty)regroup();
+ ctx.fillStyle='rgba(128,128,128,.08)';ctx.fillRect(0,0,W*S,H*S);ctx.strokeStyle='rgba(128,128,128,.22)';ctx.lineWidth=1;ctx.beginPath();
+ for(let i=0;i<=W;i++){ctx.moveTo(i*S,0);ctx.lineTo(i*S,H*S)}for(let j=0;j<=H;j++){ctx.moveTo(0,j*S);ctx.lineTo(W*S,j*S)}ctx.stroke();
+ for(const k in grid){const c=grid[k];if(c.t=='r'){const[x,y]=k.split(',').map(Number);drawRail(x,y,c,1)}}
+ for(const k in grid){const c=grid[k];if(c.t=='s'){const[x,y]=k.split(',').map(Number);drawSt(x,y,1)}}
+ for(const g of lnGs)if(g.name){const[x,y]=g.cells[g.cells.length>>1];label(g.name,x*S+S/2,y*S+S/2,`hsl(${hue(g.name)} 55% 45%)`)}
+ for(const g of stGs)if(g.name){const[x,y]=g.cells[0];label(g.name,x*S+S/2,y*S-8,'#c0392b')}
+ if(mode=='edit'&&hover&&!['er','nm','pan'].includes(tool)){const[x,y]=hover;if(tool=='st')drawSt(x,y,.5);else drawRail(x,y,{e:tool=='c'?CURVES[cvi]:PIECE[tool]},.5)}
+ if(mode=='pick'){ctx.strokeStyle='#f5a623';ctx.lineWidth=3+Math.sin(time/150)*1.5;for(const k in grid)if(grid[k].t=='s'){const[x,y]=k.split(',').map(Number);rr(x*S,y*S,S,S,8);ctx.stroke()}}
+ if(tr){const cols=['#2a7de1','#4aa3f0','#4aa3f0'];for(let i=2;i>=0;i--){const d=i*S*.8,p=pointAt(d),a=pointAt(Math.max(0,d-6)),b=pointAt(d+6);
+  const ang=Math.hypot(a[0]-b[0],a[1]-b[1])>.5?Math.atan2(a[1]-b[1],a[0]-b[0]):tr.ang;
+  ctx.save();ctx.translate(p[0],p[1]);ctx.rotate(ang);rr(-S*.36,-S*.2,S*.72,S*.4,6);ctx.fillStyle=cols[i];ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle='#fff';ctx.fillRect(-S*.2,-S*.12,S*.12,S*.24);ctx.fillRect(S*.02,-S*.12,S*.12,S*.24);ctx.restore()}}
+}
+
+/* ---------- 乗車ロジック ---------- */
+function opts(x,y){return ALL.filter(d=>link(x,y,d))}
+function pick(t){const c=opts(t.x,t.y).filter(d=>t.from!=d);if(!c.length)return t.from;const tg=(t.from+4+turn*2+8)%8;
+ const dist=d=>{const a=Math.abs(d-tg)%8;return Math.min(a,8-a)};c.sort((a,b)=>dist(a)-dist(b));return c[0]}
+function startRide(x,y){if(dirty)regroup();const o=opts(x,y);if(!o.length){msg('この駅には線路がつながっていません');return}
+ mode='ride';const g=stOf[K(x,y)];
+ tr={x,y,from:(o[0]+4)%8,to:o[0],t:.5,wait:1.5,did:true,sg:g,last:g.name||'名無しの駅',trail:[],ang:0,px:0,py:0};
+ const p=pos(at(x,y),x,y,tr.from,tr.to,.5);tr.px=p[0];tr.py=p[1];paused=false;$('ps').textContent='⏸ 停止';
+ $('ed').hidden=true;$('rd').hidden=false;msg('');resize()}
+function endRide(){mode='edit';tr=null;$('ed').hidden=false;$('rd').hidden=true;$('go').textContent='▶ 開始';$('hud').textContent='';resize()}
+function step(dt){if(!tr||paused)return;const spd=+$('sp').value;
+ if(tr.wait>0){tr.wait-=dt;if(tr.wait<=0){tr.wait=0;if(at(tr.x,tr.y).t=='s')tr.to=pick(tr)}return}
+ const c=at(tr.x,tr.y),pt=tr.t;tr.t+=spd*dt/(((tr.from|tr.to)&1)?1.2:1);
+ if(c.t=='s'&&!tr.did&&pt<.5&&tr.t>=.5&&stOf[K(tr.x,tr.y)]!=tr.sg){tr.t=.5;tr.did=true;tr.sg=stOf[K(tr.x,tr.y)];tr.wait=2.5;tr.last=tr.sg.name||'名無しの駅'}
+ else if(c.t=='s'&&pt<.5&&tr.t>=.5)tr.did=true;
+ if(tr.t>=1){const d=tr.to,over=tr.t-1;
+  if(link(tr.x,tr.y,d)){tr.x+=DX[d];tr.y+=DY[d];tr.from=(d+4)%8;tr.t=over;tr.did=false;const n=at(tr.x,tr.y);
+   if(n.t=='s')tr.to=pick(tr);else{tr.to=n.e[0]==tr.from?n.e[1]:n.e[0];tr.sg=null}}
+  else{[tr.from,tr.to]=[tr.to,tr.from];tr.t=over}}
+ const c2=at(tr.x,tr.y),p=pos(c2,tr.x,tr.y,tr.from,tr.to,Math.min(1,tr.t)),q=pos(c2,tr.x,tr.y,tr.from,tr.to,Math.min(1,tr.t+.03));
+ if(Math.hypot(q[0]-p[0],q[1]-p[1])>.01)tr.ang=Math.atan2(q[1]-p[1],q[0]-p[0]);
+ const l=tr.trail[0];if(!l||Math.hypot(p[0]-l[0],p[1]-l[1])>3){tr.trail.unshift([tr.px,tr.py]);if(tr.trail.length>70)tr.trail.pop()}
+ tr.px=p[0];tr.py=p[1]}
+function hud(){if(!tr)return;const k=K(tr.x,tr.y),c=at(tr.x,tr.y);const ln=(lnOf[k]||{}).name;
+ const t=paused?'一時停止中':tr.wait>0?'停車中: '+tr.last:'走行中';
+ $('hud').textContent=t+'　|　路線: '+(c.t=='r'?(ln||'名無し線'):'(駅構内)')+'　|　前の駅: '+tr.last}
+
+/* ---------- 入力 ---------- */
+function cell(e){const r=cvs.getBoundingClientRect(),cam=mode=='ride'?R:E;return[Math.floor((e.clientX-r.left-cam.ox)/cam.s/S),Math.floor((e.clientY-r.top-cam.oy)/cam.s/S)]}
+function apply(x,y,first){if(x<0||y<0||x>=W||y>=H)return;const k=K(x,y),old=grid[k];
+ if(tool=='er'){delete grid[k];dirty=true}
+ else if(tool=='nm'){if(!first||!old)return;const n=$('nm').value.trim();if(dirty)regroup();
+  if(old.t=='s'){for(const[a,b]of stOf[k].cells)grid[K(a,b)].n=n;msg(n?'駅名を「'+n+'」にしました':'駅名を消しました')}
+  else{for(const[a,b]of lnOf[k].cells)grid[K(a,b)].ln=n;msg(n?'路線名を「'+n+'」にしました':'路線名を消しました')}dirty=true}
+ else if(tool=='st'){grid[k]={t:'s',n:old&&old.t=='s'?old.n:''};dirty=true}
+ else if(tool!='pan'){grid[k]={t:'r',e:tool=='c'?CURVES[cvi]:PIECE[tool],ln:old&&old.t=='r'?old.ln:''};dirty=true}}
+let down=false,lc='',lx=0,ly=0;
+cvs.onpointerdown=e=>{cvs.setPointerCapture(e.pointerId);const[x,y]=cell(e);
+ if(mode=='pick'){const c=at(x,y);if(c&&c.t=='s')startRide(x,y);return}
+ if(mode!='edit')return;down=true;lx=e.clientX;ly=e.clientY;lc=K(x,y);if(tool!='pan')apply(x,y,true)};
+cvs.onpointermove=e=>{const[x,y]=cell(e);hover=[x,y];if(!down)return;
+ if(tool=='pan'){E.ox+=e.clientX-lx;E.oy+=e.clientY-ly;lx=e.clientX;ly=e.clientY}else if(K(x,y)!=lc){lc=K(x,y);apply(x,y,false)}};
+cvs.onpointerup=()=>{if(down)autosave();down=false};cvs.onpointerleave=()=>hover=null;
+cvs.addEventListener('wheel',e=>{e.preventDefault();const f=Math.exp(-e.deltaY*.0012);
+ if(mode=='ride')R.s=Math.min(4,Math.max(.6,R.s*f));else{const r=cvs.getBoundingClientRect();zoomAt(f,e.clientX-r.left,e.clientY-r.top)}},{passive:false});
+function zoomAt(f,px,py){const wx=(px-E.ox)/E.s,wy=(py-E.oy)/E.s;E.s=Math.min(4,Math.max(.2,E.s*f));E.ox=px-wx*E.s;E.oy=py-wy*E.s}
+function fit(){const s=Math.min(cw/(W*S),ch/(H*S));E.s=s;E.ox=(cw-W*S*s)/2;E.oy=(ch-H*S*s)/2}
+function resize(){dpr=window.devicePixelRatio||1;const w=$('wrap');cw=w.clientWidth;ch=w.clientHeight;cvs.width=cw*dpr;cvs.height=ch*dpr;if(!resize.done||mode=='edit'&&!resize.user){fit();resize.done=1}}
+addEventListener('resize',()=>{resize.user=0;resize()});
+function setTool(t){tool=t;document.querySelectorAll('[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t==t));if(t=='nm'){$('nm').focus();msg('名前を入力して、駅(駅名)や線路(路線名)をクリック')}}
+document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>setTool(b.dataset.t));
+function rot(){cvi=(cvi+1)%CURVES.length;$('bc').textContent='カーブ '+(cvi+1)+'/'+CURVES.length;setTool('c')}
+$('rot').onclick=rot;
+$('zi').onclick=()=>{resize.user=1;zoomAt(1.25,cw/2,ch/2)};$('zo').onclick=()=>{resize.user=1;zoomAt(.8,cw/2,ch/2)};$('zf').onclick=()=>{resize.user=0;fit()};
+function setTurn(t){turn=t;$('tl').classList.toggle('on',t<0);$('ts').classList.toggle('on',t==0);$('tr').classList.toggle('on',t>0)}
+$('tl').onclick=()=>setTurn(-1);$('ts').onclick=()=>setTurn(0);$('tr').onclick=()=>setTurn(1);setTurn(0);
+function togglePause(){paused=!paused;$('ps').textContent=paused?'▶ 再開':'⏸ 停止'}
+$('ps').onclick=togglePause;$('en').onclick=endRide;
+$('tp').onchange=e=>{const g=stGs[+e.target.value];if(g)startRide(g.cells[0][0],g.cells[0][1])};
+addEventListener('keydown',e=>{if(e.target.tagName=='INPUT'&&e.target.type=='text')return;
+ if(e.key=='r'||e.key=='R'){if(mode=='edit')rot()}
+ if(mode=='ride'){if(e.key=='ArrowLeft')setTurn(-1);if(e.key=='ArrowUp')setTurn(0);if(e.key=='ArrowRight')setTurn(1);if(e.key==' '){e.preventDefault();togglePause()}}});
+$('go').onclick=()=>{if(mode=='pick'){mode='edit';$('go').textContent='▶ 開始';msg('');return}
+ if(dirty)regroup();if(!stGs.length){msg('駅を1つ以上置いてね');return}
+ mode='pick';$('go').textContent='キャンセル';msg('乗りたい駅をクリックしてね(tp)');
+ $('tp').innerHTML=stGs.map((g,i)=>`<option value="${i}">${(g.name||'名無しの駅').replace(/[<&]/g,'')} (${g.cells[0][0]},${g.cells[0][1]})</option>`).join('')};
+$('cl').onclick=()=>{if(!clr){clr=1;$('cl').textContent='本当に消す?';setTimeout(()=>{clr=0;$('cl').textContent='全消去'},2500);return}
+ grid={};dirty=true;clr=0;$('cl').textContent='全消去';autosave();msg('全部消しました')};
+$('sv').onclick=async()=>{const data=JSON.stringify({v:1,w:W,h:H,cells:grid});
+ try{const dl=window.claude&&await window.claude.use('downloads');
+  if(dl){await dl.save({filename:'densha-life.json',data});msg('保存しました (densha-life.json)');return}}
+ catch(e){if(e&&e.code=='declined'){msg('保存をキャンセルしました');return}}
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:'application/json'}));a.download='densha-life.json';a.click();msg('保存しました')};
+$('ld').onclick=()=>$('fi').click();
+$('fi').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
+ r.onload=()=>{try{const o=JSON.parse(r.result);if(!o||typeof o.cells!='object')throw 0;grid=o.cells;dirty=true;autosave();msg('読み込みました')}catch(x){msg('読み込めないファイルです')}};
+ r.readAsText(f);e.target.value=''};
+
+let last=0;
+function loop(t){const dt=Math.min(.05,(t-last)/1000||0);last=t;
+ if(mode=='ride'&&tr){step(dt);R.ox=cw/2-tr.px*R.s;R.oy=ch/2-tr.py*R.s;hud()}
+ draw(t);requestAnimationFrame(loop)}
+setTool('h');resize();requestAnimationFrame(loop);
+</script></body></html>
