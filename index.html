@@ -135,7 +135,7 @@ function showDirs(o){const el=$('dirs');el.textContent='';const t=document.creat
   if(n){if(n.t=='s')nm=(stOf[K(nx,ny)]||{}).name||'駅';else if(q>=0)nm=(lnOf[KP(nx,ny,q)]||{}).name||'名無し線'}
   const b=document.createElement('button');b.textContent=AR[d]+' '+nm;b.onclick=()=>go(d);el.append(b)}el.hidden=false}
 function go(d){tr.choose=false;tr.to=d;tr.from=(d+4)%8;tr.wait=0;$('dirs').hidden=true}
-function beginChoice(){const o=opts(tr.x,tr.y);if(o.length==1){go(o[0]);return}tr.choose=true;showDirs(o)}
+function beginChoice(){const o=opts(tr.x,tr.y);tr.choose=true;showDirs(o)}
 function transfer(x,y){const t=at(x,y);if(!tr||!t||t.t!='s')return;const g=stOf[K(tr.x,tr.y)];if(!g||stOf[K(x,y)]!==g||(x==tr.x&&y==tr.y))return;
  if(!(tr.wait>0||tr.choose)){msg('駅に止まっている間だけ乗り換えできます');return}
  if(!opts(x,y).length){msg('そこには線路がつながっていません');return}
