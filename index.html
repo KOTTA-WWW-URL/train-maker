@@ -140,7 +140,7 @@ function transfer(x,y){const t=at(x,y);if(!tr||!t||t.t!='s')return;const g=stOf[
  if(!(tr.wait>0||tr.choose)){msg('駅に止まっている間だけ乗り換えできます');return}
  if(!opts(x,y).length){msg('そこには線路がつながっていません');return}
  tr.x=x;tr.y=y;tr.t=.5;tr.did=true;tr.sg=g;tr.wait=0;tr.trail=[];const p=pos(t,x,y,0,0,.5);tr.px=p[0];tr.py=p[1];msg('乗り換えました');beginChoice()}
-function step(dt){if(!tr||paused||tr.choose)return;const c0=at(tr.x,tr.y),lg=c0.e?lnOf[KP(tr.x,tr.y,c0.e.includes(tr.from)?0:1)]:null;if(lg)tr.sh=lg.name.includes('新幹線');const spd=+$('sp').value*(tr.sh?2.5:1);
+function step(dt){if(!tr||paused||tr.choose)return;const c0=at(tr.x,tr.y),lg=c0.e?lnOf[KP(tr.x,tr.y,c0.e.includes(tr.from)?0:1)]:null;if(lg)tr.sh=lg.name.includes('新幹線');const spd=+$('sp').value*(tr.sh?1.5:1);
  if(tr.wait>0){tr.wait-=dt;if(tr.wait<=0){tr.wait=0;if(at(tr.x,tr.y).t=='s')tr.to=pick(tr)}return}
  const c=at(tr.x,tr.y),pt=tr.t;tr.t+=spd*dt/(((tr.from|tr.to)&1)?1.2:1);
  if(c.t=='s'&&!tr.did&&pt<.5&&tr.t>=.5&&stOf[K(tr.x,tr.y)]!=tr.sg){tr.t=.5;tr.did=true;tr.sg=stOf[K(tr.x,tr.y)];tr.wait=2.5;tr.last=tr.sg.name||'名無しの駅'}
