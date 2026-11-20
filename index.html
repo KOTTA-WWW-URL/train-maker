@@ -23,7 +23,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
 <button data-t="nm">名前ブロック</button><input type="text" id="nm" placeholder="名前を入力">
 <button data-t="er">消しゴム</button><button data-t="pan">手(移動)</button>
 <button id="zi">＋</button><button id="zo">－</button><button id="zf">全体</button><span class="sp"></span>範囲を広げる:<button data-x="l" title="左に10マス">←＋</button><button data-x="u" title="上に10マス">↑＋</button><button data-x="d" title="下に10マス">↓＋</button><button data-x="r" title="右に10マス">→＋</button><span class="sp"></span>
-<button id="sv">保存</button><button id="ld">読込</button><button id="cl">全消去</button><button id="go">▶ 開始</button>
+<button id="un" title="Ctrl+Z">↶ 戻す</button><button id="re" title="Shift+Ctrl+Z">↷ やり直す</button><button id="sv">保存</button><button id="ld">読込</button><button id="cl">全消去</button><button id="go">▶ 開始</button>
 <input type="file" id="fi" accept=".json,application/json" hidden>
 </div>
 <div class="bar" id="rd" hidden>
@@ -195,12 +195,12 @@ function apply(x,y,first,wx,wy){if(x<0||y<0||x>=W||y>=H)return;const k=K(x,y),ol
  else if(old&&old.t=='r'&&!old.x&&!e.some(d=>old.e.includes(d))){old.x={e,ln:'',ci:undefined};dirty=true}
  else{grid[k]={t:'r',e,ln:old&&old.t=='r'?old.ln:'',ci:old?old.ci:undefined};dirty=true}}}
 let down=false,lc='',lx=0,ly=0;
-cvs.onpointerdown=e=>{cvs.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,[e.clientX,e.clientY]);if(ptrs.size==2){if(snap&&performance.now()-snapT<500){grid=JSON.parse(snap);dirty=true}snap=null;down=false;pd=0;pinch();return}const[x,y,wx,wy]=cell(e);
+cvs.onpointerdown=e=>{cvs.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,[e.clientX,e.clientY]);if(ptrs.size==2){if(snap&&performance.now()-snapT<500){grid=JSON.parse(snap);dirty=true}snap=null;stroke=null;down=false;pd=0;pinch();return}const[x,y,wx,wy]=cell(e);
  if(mode=='pick'){const c=at(x,y);if(c&&c.t=='s')startRide(x,y);return}
- if(mode=='ride'){transfer(x,y);return}if(mode!='edit')return;if(e.pointerType=='touch'){snap=JSON.stringify(grid);snapT=performance.now()}down=true;lx=e.clientX;ly=e.clientY;lc=K(x,y);if(tool!='pan')apply(x,y,true,wx,wy)};
+ if(mode=='ride'){transfer(x,y);return}if(mode!='edit')return;if(e.pointerType=='touch'){snap=JSON.stringify(grid);snapT=performance.now()}stroke=tool=='pan'?null:snapshot();down=true;lx=e.clientX;ly=e.clientY;lc=K(x,y);if(tool!='pan')apply(x,y,true,wx,wy)};
 cvs.onpointermove=e=>{if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,[e.clientX,e.clientY]);if(ptrs.size==2){pinch();return}const[x,y]=cell(e);hover=[x,y];if(!down)return;
  if(tool=='pan'){E.ox+=e.clientX-lx;E.oy+=e.clientY-ly;lx=e.clientX;ly=e.clientY}else if(K(x,y)!=lc){lc=K(x,y);apply(x,y,false)}};
-cvs.onpointerup=cvs.onpointercancel=e=>{ptrs.delete(e.pointerId);pd=0;if(down)autosave();down=false};cvs.onpointerleave=()=>hover=null;
+cvs.onpointerup=cvs.onpointercancel=e=>{ptrs.delete(e.pointerId);pd=0;if(stroke!==null){if(snapshot()!==stroke){undoStack.push(stroke);if(undoStack.length>100)undoStack.shift();redoStack=[];updUR()}stroke=null}if(down)autosave();down=false};cvs.onpointerleave=()=>hover=null;
 cvs.addEventListener('wheel',e=>{e.preventDefault();const tp=!e.ctrlKey&&mode!='ride'&&(e.deltaX!=0||Math.abs(e.deltaY)<50||!Number.isInteger(e.deltaY));if(tp){E.ox-=e.deltaX;E.oy-=e.deltaY;resize.user=1;return}const f=Math.exp(-e.deltaY*(e.ctrlKey?.01:.0012));
  if(mode=='ride')R.s=Math.min(4,Math.max(.6,R.s*f));else{const r=cvs.getBoundingClientRect();zoomAt(f,e.clientX-r.left,e.clientY-r.top)}},{passive:false});
 function zoomAt(f,px,py){const wx=(px-E.ox)/E.s,wy=(py-E.oy)/E.s;E.s=Math.min(4,Math.max(.1,E.s*f));E.ox=px-wx*E.s;E.oy=py-wy*E.s}
@@ -218,6 +218,8 @@ function togglePause(){paused=!paused;$('ps').textContent=paused?'▶ 再開':'�
 $('ps').onclick=togglePause;$('en').onclick=endRide;
 $('tp').onchange=e=>{const g=stGs[+e.target.value];if(g)startRide(g.cells[0][0],g.cells[0][1])};
 addEventListener('keydown',e=>{if(e.target.tagName=='INPUT'&&e.target.type=='text')return;
+ if((e.ctrlKey||e.metaKey)&&(e.key=='z'||e.key=='Z')){e.preventDefault();if(e.shiftKey)redo();else undo();return}
+ if((e.ctrlKey||e.metaKey)&&(e.key=='y'||e.key=='Y')){e.preventDefault();redo();return}
  if(e.key=='r'||e.key=='R'){if(mode=='edit')rot()}
  if(mode=='ride'){if(e.key=='ArrowLeft')setTurn(-1);if(e.key=='ArrowUp')setTurn(0);if(e.key=='ArrowRight')setTurn(1);if(e.key==' '){e.preventDefault();togglePause()}}});
 $('go').onclick=()=>{if(mode=='pick'){mode='edit';$('go').textContent='▶ 開始';msg('');return}
@@ -225,7 +227,7 @@ $('go').onclick=()=>{if(mode=='pick'){mode='edit';$('go').textContent='▶ 開�
  mode='pick';$('go').textContent='キャンセル';msg('乗りたい駅をクリックしてね(tp)');
  $('tp').innerHTML=stGs.map((g,i)=>`<option value="${i}">${(g.name||'名無しの駅').replace(/[<&]/g,'')} (${g.cells[0][0]},${g.cells[0][1]})</option>`).join('')};
 $('cl').onclick=()=>{if(!clr){clr=1;$('cl').textContent='本当に消す?';setTimeout(()=>{clr=0;$('cl').textContent='全消去'},2500);return}
- grid={};dirty=true;clr=0;$('cl').textContent='全消去';autosave();msg('全部消しました')};
+ hist();grid={};dirty=true;clr=0;$('cl').textContent='全消去';autosave();msg('全部消しました')};
 $('sv').onclick=async()=>{const data=JSON.stringify({v:1,w:W,h:H,cells:grid});
  try{const dl=window.claude&&await window.claude.use('downloads');
   if(dl){await dl.save({filename:'densha-life.json',data});msg('保存しました (densha-life.json)');return}}
@@ -233,12 +235,20 @@ $('sv').onclick=async()=>{const data=JSON.stringify({v:1,w:W,h:H,cells:grid});
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:'application/json'}));a.download='densha-life.json';a.click();msg('保存しました')};
 $('ld').onclick=()=>$('fi').click();
 $('fi').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
- r.onload=()=>{try{const o=JSON.parse(r.result);if(!o||typeof o.cells!='object')throw 0;grid=o.cells;W=Math.max(60,o.w|0);H=Math.max(36,o.h|0);fitBounds();dirty=true;autosave();msg('読み込みました')}catch(x){msg('読み込めないファイルです')}};
+ r.onload=()=>{try{const o=JSON.parse(r.result);if(!o||typeof o.cells!='object')throw 0;hist();grid=o.cells;W=Math.max(60,o.w|0);H=Math.max(36,o.h|0);fitBounds();dirty=true;autosave();msg('読み込みました')}catch(x){msg('読み込めないファイルです')}};
  r.readAsText(f);e.target.value=''};
 
-function expand(dir){const N=10,hz=dir=='l'||dir=='r';if((hz?W:H)+N>300){msg('これ以上は広げられません(最大300マス)');return}
+let undoStack=[],redoStack=[],stroke=null;
+function snapshot(){return JSON.stringify({g:grid,w:W,h:H})}
+function updUR(){$('un').disabled=!undoStack.length;$('re').disabled=!redoStack.length}
+function hist(s){undoStack.push(s||snapshot());if(undoStack.length>100)undoStack.shift();redoStack=[];updUR()}
+function restore(s){const o=JSON.parse(s);grid=o.g;W=o.w;H=o.h;dirty=true;autosave()}
+function undo(){if(mode!='edit')return;if(!undoStack.length){msg('これ以上戻せません');return}redoStack.push(snapshot());restore(undoStack.pop());updUR();msg('元に戻しました')}
+function redo(){if(mode!='edit')return;if(!redoStack.length){msg('やり直すものがありません');return}undoStack.push(snapshot());restore(redoStack.pop());updUR();msg('やり直しました')}
+$('un').onclick=undo;$('re').onclick=redo;updUR();
+function expand(dir){const N=10,sn=snapshot(),hz=dir=='l'||dir=='r';if((hz?W:H)+N>300){msg('これ以上は広げられません(最大300マス)');return}
  if(dir=='l'||dir=='u'){const g={};for(const k in grid){const[x,y]=k.split(',').map(Number);g[dir=='l'?K(x+N,y):K(x,y+N)]=grid[k]}grid=g;if(dir=='l')E.ox-=N*S*E.s;else E.oy-=N*S*E.s}
- if(hz)W+=N;else H+=N;dirty=true;autosave();msg('範囲を広げました ('+W+'×'+H+')')}
+ hist(sn);if(hz)W+=N;else H+=N;dirty=true;autosave();msg('範囲を広げました ('+W+'×'+H+')')}
 document.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>expand(b.dataset.x));
 let last=0;
 function loop(t){const dt=Math.min(.05,(t-last)/1000||0);last=t;
