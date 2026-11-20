@@ -15,11 +15,11 @@ input[type=text]{width:8em}.sp{width:8px}
 #wrap{flex:1;position:relative;min-height:0}
 canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
 #msg,#hud{position:absolute;left:8px;right:8px;pointer-events:none;padding:6px 10px;border-radius:8px;background:rgba(20,20,20,.72);color:#fff;width:fit-content;max-width:calc(100% - 16px)}
-#msg{top:8px}#hud{bottom:8px}#dirs{position:absolute;left:8px;bottom:56px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:6px 10px;border-radius:8px;background:rgba(20,20,20,.78);color:#fff;max-width:calc(100% - 16px);box-sizing:border-box}#dirs[hidden]{display:none}#msg:empty,#hud:empty{display:none}
+#msg{top:8px}#hud{bottom:8px}.ln{overflow:hidden;white-space:nowrap}.ln span{display:inline-block}.ln.mq span{animation:mq 9s ease-in-out infinite alternate}@keyframes mq{0%,12%{transform:translateX(0)}88%,100%{transform:translateX(var(--d))}}#dirs{position:absolute;left:8px;bottom:56px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:6px 10px;border-radius:8px;background:rgba(20,20,20,.78);color:#fff;max-width:calc(100% - 16px);box-sizing:border-box}#dirs[hidden]{display:none}#msg:empty,#hud:empty{display:none}
 </style></head><body>
 <div class="bar" id="ed">
 <button data-t="h">━ 横</button><button data-t="v">┃ 縦</button><button data-t="d1">／ 斜め</button><button data-t="d2">＼ 斜め</button>
-<button data-t="c" id="bc">カーブ 1/12</button><button id="rot">回転(R)</button><button data-t="st">駅</button>
+<button data-t="c" id="bc">カーブ 1/12</button><button id="rot">回転(R)</button><canvas id="cp" width="40" height="40" title="今の向き" style="position:static;inset:auto;width:36px;height:36px;border-radius:6px;background:var(--bt)"></canvas><button data-t="br">分岐</button><button data-t="st">駅</button>
 <button data-t="nm">名前ブロック</button><input type="text" id="nm" placeholder="名前を入力">
 <button data-t="er">消しゴム</button><button data-t="pan">手(移動)</button>
 <button id="zi">＋</button><button id="zo">－</button><button id="zf">全体</button><span class="sp"></span>範囲を広げる:<button data-x="l" title="左に10マス">←＋</button><button data-x="u" title="上に10マス">↑＋</button><button data-x="d" title="下に10マス">↓＋</button><button data-x="r" title="右に10マス">→＋</button><span class="sp"></span>
@@ -31,12 +31,14 @@ canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
 <label>速度 <input type="range" id="sp" min="1" max="8" step="0.5" value="3"></label>
 <label>tp <select id="tp"></select></label><button id="en">■ 降りる</button>
 </div>
-<div id="wrap"><canvas id="c"></canvas><div id="msg"></div><div id="dirs" hidden></div><div id="hud"></div></div>
+<div id="wrap"><canvas id="c"></canvas><div id="msg"></div><div id="dirs" hidden></div><div id="hud" hidden><div id="h1" class="ln"><span></span></div><div id="h2" class="ln"><span></span></div></div></div>
 <script>
 const S=40;let W=60,H=36;
 const DX=[0,1,1,1,0,-1,-1,-1],DY=[-1,-1,0,1,1,1,0,-1],ALL=[0,1,2,3,4,5,6,7];
 const CURVES=[[0,2],[2,4],[4,6],[6,0]];for(let d=0;d<8;d++)CURVES.push([d,(d+3)%8]);
 const PIECE={h:[2,6],v:[0,4],d1:[1,5],d2:[7,3]};
+const BRS=[];for(let s=0;s<8;s++)BRS.push([s,(s+4)%8,(s+3)%8],[s,(s+4)%8,(s+5)%8]);for(let s=0;s<8;s++)BRS.push([s,(s+4)%8,(s+2)%8]);
+let bri=0;const curE=()=>tool=='br'?BRS[bri]:tool=='c'?CURVES[cvi]:PIECE[tool];
 const $=id=>document.getElementById(id),K=(x,y)=>x+','+y;
 const cvs=$('c'),ctx=cvs.getContext('2d');
 let grid={},tool='h',cvi=0,mode='edit',dirty=true,hover=null,tr=null,turn=0,paused=false,zoom=1.8;
@@ -77,7 +79,7 @@ const hue=n=>{let h=0;for(const c of n)h=(h*31+c.charCodeAt(0))%360;return h};
 const P=(x,y,d)=>[x*S+S/2+DX[d]*S/2,y*S+S/2+DY[d]*S/2];
 function rr(a,b,w,h,r){ctx.beginPath();ctx.roundRect?ctx.roundRect(a,b,w,h,r):ctx.rect(a,b,w,h)}
 function drawRail(x,y,c,al,ps){ctx.globalAlpha=al;ctx.lineCap='round';const a=P(x,y,c.e[0]),b=P(x,y,c.e[1]);
- ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.quadraticCurveTo(x*S+S/2,y*S+S/2,b[0],b[1]);
+ ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.quadraticCurveTo(x*S+S/2,y*S+S/2,b[0],b[1]);if(c.e[2]!=null){const b2=P(x,y,c.e[2]);ctx.moveTo(a[0],a[1]);ctx.quadraticCurveTo(x*S+S/2,y*S+S/2,b2[0],b2[1])}
  if(ps!==1){ctx.strokeStyle=c.ci!=null?pal(c.ci):'#7d7466';ctx.lineWidth=13;ctx.stroke()}
  if(ps!==0){ctx.strokeStyle='#f4f4f4';ctx.lineWidth=4;ctx.stroke()}ctx.globalAlpha=1}
 function drawSt(x,y,al){const c=at(x,y),th=c&&c.e,m=th?8:3;ctx.globalAlpha=al;rr(x*S+m,y*S+m,S-2*m,S-2*m,6);ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle=th&&c.ci!=null?pal(c.ci):'#c0392b';ctx.lineWidth=3;ctx.stroke();
@@ -108,9 +110,10 @@ function draw(time){
  for(const g of stGs)drawGroup(g);
  
  
+ if(mode=='ride')for(const k in grid){const c=grid[k];for(const p of[c,c.x]){if(p&&p.e&&p.e.length==3){const[x,y]=k.split(',').map(Number),q=P(x,y,railExit(p,p.e[0])),cx=x*S+S/2,cy=y*S+S/2;ctx.beginPath();ctx.arc(cx+(q[0]-cx)*.62,cy+(q[1]-cy)*.62,4.5,0,7);ctx.fillStyle='#ffd400';ctx.fill();ctx.strokeStyle='#333';ctx.lineWidth=1.5;ctx.stroke()}}}
  for(const g of lnGs)if(g.name){const[x,y]=g.cells[g.cells.length>>1];label(g.name,x*S+S/2,y*S+S/2,pal(g.ci))}
  for(const g of stGs)if(g.name){const[x,y]=g.cells[0];label(g.name,x*S+S/2,y*S-8,'#c0392b')}
- if(mode=='edit'&&hover&&!['er','nm','pan'].includes(tool)){const[x,y]=hover;if(tool=='st')drawSt(x,y,.5);else drawRail(x,y,{e:tool=='c'?CURVES[cvi]:PIECE[tool]},.5)}
+ if(mode=='edit'&&hover&&!['er','nm','pan'].includes(tool)){const[x,y]=hover;if(tool=='st')drawSt(x,y,.5);else drawRail(x,y,{e:curE()},.5)}
  if(mode=='pick'){ctx.strokeStyle='#f5a623';ctx.lineWidth=3+Math.sin(time/150)*1.5;for(const k in grid)if(grid[k].t=='s'){const[x,y]=k.split(',').map(Number);rr(x*S,y*S,S,S,8);ctx.stroke()}}
  if(mode=='ride'&&tr&&(tr.wait>0||tr.choose)){const g=stOf[K(tr.x,tr.y)];if(g&&g.cells.length>1){ctx.save();ctx.shadowColor='#ffd400';ctx.shadowBlur=18;ctx.strokeStyle='#ffd400';ctx.lineWidth=4;ctx.globalAlpha=.65+.35*Math.sin(time/200);for(const[x,y]of g.cells){if(x==tr.x&&y==tr.y)continue;if(!opts(x,y).length)continue;rr(x*S-1,y*S-1,S+2,S+2,9);ctx.stroke()}ctx.restore()}}
  if(tr){const cols=['#2a7de1','#4aa3f0','#4aa3f0'];for(let i=2;i>=0;i--){const d=i*S*.8,p=pointAt(d),a=pointAt(Math.max(0,d-6)),b=pointAt(d+6);
@@ -128,26 +131,47 @@ function startRide(x,y){if(dirty)regroup();const o=opts(x,y);if(!o.length){msg('
  tr={x,y,from:(o[0]+4)%8,to:o[0],t:.5,wait:0,did:true,choose:false,sg:g,last:g.name||'名無しの駅',trail:[],ang:0,px:0,py:0};
  const p=pos(at(x,y),x,y,tr.from,tr.to,.5);tr.px=p[0];tr.py=p[1];paused=false;$('ps').textContent='⏸ 停止';
  $('ed').hidden=true;$('rd').hidden=false;msg('');resize();beginChoice()}
-function endRide(){mode='edit';tr=null;$('ed').hidden=false;$('rd').hidden=true;$('go').textContent='▶ 開始';$('hud').textContent='';$('dirs').hidden=true;resize()}
+function endRide(){mode='edit';tr=null;$('ed').hidden=false;$('rd').hidden=true;$('go').textContent='▶ 開始';$('hud').hidden=true;$('dirs').hidden=true;resize()}
 const AR=['↑','↗','→','↘','↓','↙','←','↖'];
 function showDirs(o){const el=$('dirs');el.textContent='';const t=document.createElement('span');t.textContent='進行方向:';el.append(t);
  for(const d of o){const nx=tr.x+DX[d],ny=tr.y+DY[d],n=at(nx,ny),q=pcOf(n,(d+4)%8);let nm='';
   if(n){if(n.t=='s')nm=(stOf[K(nx,ny)]||{}).name||'駅';else if(q>=0)nm=(lnOf[KP(nx,ny,q)]||{}).name||'名無し線'}
   const b=document.createElement('button');b.textContent=AR[d]+' '+nm;b.onclick=()=>go(d);el.append(b)}el.hidden=false}
-function go(d){tr.choose=false;tr.to=d;tr.from=(d+4)%8;tr.wait=0;$('dirs').hidden=true}
+function go(d){const q0=at(tr.x+DX[d],tr.y+DY[d]),q1=pcOf(q0,(d+4)%8);if(q0&&q0.e&&q1>=0)tr.lg=lnOf[KP(tr.x+DX[d],tr.y+DY[d],q1)];tr.choose=false;tr.to=d;tr.from=(d+4)%8;tr.wait=0;$('dirs').hidden=true}
 function beginChoice(){const o=opts(tr.x,tr.y);tr.choose=true;showDirs(o)}
 function transfer(x,y){const t=at(x,y);if(!tr||!t||t.t!='s')return;const g=stOf[K(tr.x,tr.y)];if(!g||stOf[K(x,y)]!==g||(x==tr.x&&y==tr.y))return;
  if(!(tr.wait>0||tr.choose)){msg('駅に止まっている間だけ乗り換えできます');return}
  if(!opts(x,y).length){msg('そこには線路がつながっていません');return}
  tr.x=x;tr.y=y;tr.t=.5;tr.did=true;tr.sg=g;tr.wait=0;tr.trail=[];const p=pos(t,x,y,0,0,.5);tr.px=p[0];tr.py=p[1];msg('乗り換えました');beginChoice()}
-function step(dt){if(!tr||paused||tr.choose)return;const c0=at(tr.x,tr.y),lg=c0.e?lnOf[KP(tr.x,tr.y,c0.e.includes(tr.from)?0:1)]:null;if(lg)tr.sh=lg.name.includes('新幹線');const spd=+$('sp').value*(tr.sh?1.5:1);
+function railExit(p,f){const e=p.e;if(e.length<3)return e[0]==f?e[1]:e[0];if(f!=e[0])return e[0];const tg=(f+4+turn*2+8)%8,dist=d=>{const a=Math.abs(d-tg)%8;return Math.min(a,8-a)};return dist(e[1])<=dist(e[2])?e[1]:e[2]}
+function nextStn(){let x=tr.x,y=tr.y,from=tr.from,to=tr.wait>0?pick(tr):tr.to,c=at(x,y);const g0=c.t=='s'?stOf[K(x,y)]:null;
+ if(c.t=='s'&&!tr.did&&stOf[K(x,y)]!==tr.sg&&tr.t<.5)return stOf[K(x,y)];
+ for(let i=0;i<600;i++){if(!link(x,y,to)){const t=from;from=to;to=t;continue}
+  x+=DX[to];y+=DY[to];from=(to+4)%8;c=at(x,y);
+  if(c.t=='s'){const g=stOf[K(x,y)];if(g!==g0)return g;to=pick({x,y,from})}
+  else to=railExit(c.e.includes(from)?c:c.x,from)}
+ return null}
+function setLine(id,t){const el=$(id),s=el.firstChild;if(el._t===t)return;el._t=t;s.textContent=t;el.classList.remove('mq');const ov=s.offsetWidth-el.clientWidth;if(ov>2){el.style.setProperty('--d',-ov+'px');el.classList.add('mq')}}
+function nextInfo(){if(tr.choose)return'';const f=nextStn();if(!f)return'次の駅: なし';
+ const nm=f.name||'名無しの駅',ls=[],seen={};
+ const add=g=>{if(!g||g===tr.lg)return;const n=g.name||'名無し',l=n.endsWith('線')?n:n+'線';if(!seen[l]){seen[l]=1;ls.push(l)}};
+ for(const[x,y]of f.cells){const c=at(x,y);if(c.e){add(lnOf[KP(x,y,0)]);if(c.x)add(lnOf[KP(x,y,1)])}
+  for(const d of ALL){const nx=x+DX[d],ny=y+DY[d],n=at(nx,ny);if(!n||!n.e||stOf[K(nx,ny)]===f||!link(x,y,d))continue;const q=pcOf(n,(d+4)%8);if(q>=0)add(lnOf[KP(nx,ny,q)])}}
+ return'次は'+nm+(nm.endsWith('駅')?'':'駅')+'。'+(ls.length?'お乗り換えは'+ls.join('、')+'。':'お乗り換えはありません。')}
+function drawCP(){const g=$('cp').getContext('2d'),e=curE()||CURVES[cvi],cx=20,cy=20,pt=d=>[cx+DX[d]*17,cy+DY[d]*17];g.clearRect(0,0,40,40);g.lineCap='round';g.strokeStyle='rgba(128,128,128,.35)';g.lineWidth=1;g.strokeRect(3,3,34,34);
+ g.strokeStyle='#2a7de1';g.lineWidth=5;g.beginPath();const a=pt(e[0]);for(let i=1;i<e.length;i++){const b=pt(e[i]);g.moveTo(a[0],a[1]);g.quadraticCurveTo(cx,cy,b[0],b[1])}g.stroke();
+ g.fillStyle='#e67e22';for(const d of e){const p=pt(d);g.beginPath();g.arc(p[0],p[1],3,0,7);g.fill()}}
+const ptrs=new Map();let pd=0,pm=[0,0],snap=null,snapT=0;
+function pinch(){const r=cvs.getBoundingClientRect(),a=[...ptrs.values()],d=Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1]),mx=(a[0][0]+a[1][0])/2-r.left,my=(a[0][1]+a[1][1])/2-r.top;
+ if(pd>0){const f=d/pd;if(mode=='ride')R.s=Math.min(4,Math.max(.6,R.s*f));else{E.ox+=mx-pm[0];E.oy+=my-pm[1];zoomAt(f,mx,my);resize.user=1}}pd=d;pm=[mx,my]}
+function step(dt){if(!tr||paused||tr.choose)return;const c0=at(tr.x,tr.y),lg=c0.e?lnOf[KP(tr.x,tr.y,c0.e.includes(tr.from)?0:1)]:null;if(lg){tr.sh=lg.name.includes('新幹線');tr.lg=lg}const spd=+$('sp').value*(tr.sh?1.5:1);
  if(tr.wait>0){tr.wait-=dt;if(tr.wait<=0){tr.wait=0;if(at(tr.x,tr.y).t=='s')tr.to=pick(tr)}return}
  const c=at(tr.x,tr.y),pt=tr.t;tr.t+=spd*dt/(((tr.from|tr.to)&1)?1.2:1);
  if(c.t=='s'&&!tr.did&&pt<.5&&tr.t>=.5&&stOf[K(tr.x,tr.y)]!=tr.sg){tr.t=.5;tr.did=true;tr.sg=stOf[K(tr.x,tr.y)];tr.wait=2.5;tr.last=tr.sg.name||'名無しの駅'}
  else if(c.t=='s'&&pt<.5&&tr.t>=.5)tr.did=true;
  if(tr.t>=1){const d=tr.to,over=tr.t-1;
   if(link(tr.x,tr.y,d)){tr.x+=DX[d];tr.y+=DY[d];tr.from=(d+4)%8;tr.t=over;tr.did=false;const n=at(tr.x,tr.y);
-   if(n.t=='s')tr.to=pick(tr);else{const p=n.e.includes(tr.from)?n:n.x;tr.to=p.e[0]==tr.from?p.e[1]:p.e[0];tr.sg=null}}
+   if(n.t=='s')tr.to=pick(tr);else{const p=n.e.includes(tr.from)?n:n.x;tr.to=railExit(p,tr.from);tr.sg=null}}
   else{[tr.from,tr.to]=[tr.to,tr.from];tr.t=over}}
  const c2=at(tr.x,tr.y),p=pos(c2,tr.x,tr.y,tr.from,tr.to,Math.min(1,tr.t)),q=pos(c2,tr.x,tr.y,tr.from,tr.to,Math.min(1,tr.t+.03));
  if(Math.hypot(q[0]-p[0],q[1]-p[1])>.01)tr.ang=Math.atan2(q[1]-p[1],q[0]-p[0]);
@@ -155,7 +179,7 @@ function step(dt){if(!tr||paused||tr.choose)return;const c0=at(tr.x,tr.y),lg=c0.
  tr.px=p[0];tr.py=p[1]}
 function hud(){if(!tr)return;const c=at(tr.x,tr.y),ln=(lnOf[KP(tr.x,tr.y,c.e&&c.e.includes(tr.from)?0:1)]||{}).name;
  const g=stOf[K(tr.x,tr.y)],t=paused?'一時停止中':tr.choose?'進行方向を選んでください':tr.wait>0?'停車中: '+tr.last+(g&&g.cells.length>1?'(同じ駅の別の場所をクリックで乗り換え)':''):'走行中';
- $('hud').textContent=(tr.sh?'🚄 ':'')+t+'　|　路線: '+(c.t=='r'?(ln||'名無し線'):'(駅構内)')+'　|　前の駅: '+tr.last}
+ $('hud').hidden=false;const L=(tr.sh?'🚄 ':'')+t+'　|　路線: '+(c.t=='r'?(ln||'名無し線'):'(駅構内)')+'　|　前の駅: '+tr.last;setLine('h1',L);setLine('h2',nextInfo())}
 
 /* ---------- 入力 ---------- */
 function cell(e){const r=cvs.getBoundingClientRect(),cam=mode=='ride'?R:E;const wx=(e.clientX-r.left-cam.ox)/cam.s,wy=(e.clientY-r.top-cam.oy)/cam.s;return[Math.floor(wx/S),Math.floor(wy/S),wx,wy]}
@@ -166,26 +190,26 @@ function apply(x,y,first,wx,wy){if(x<0||y<0||x>=W||y>=H)return;const k=K(x,y),ol
   if(old.t=='s'){for(const[a,b]of stOf[k].cells)grid[K(a,b)].n=n;msg(n?'駅名を「'+n+'」にしました':'駅名を消しました')}
   else{const i=old.x?nearP(old,x,y,wx,wy):0;for(const[a,b,j]of lnOf[KP(x,y,i)].cells)pc(grid[K(a,b)],j).ln=n;msg(n?'路線名を「'+n+'」にしました':'路線名を消しました')}dirty=true}
  else if(tool=='st'){if(old&&old.x){if(first)msg('交差している所には駅を置けません');return}const n={t:'s',n:old&&old.t=='s'?old.n:''};if(old&&old.e){n.e=old.e;n.ln=old.ln||'';n.ci=old.ci}grid[k]=n;dirty=true}
- else if(tool!='pan'){const e=tool=='c'?CURVES[cvi]:PIECE[tool],sm=(a,b)=>b.every(d=>a.includes(d));
+ else if(tool!='pan'){const e=curE(),sm=(a,b)=>b.every(d=>a.includes(d));
  if(old&&old.t=='r'&&(sm(old.e,e)||old.x&&sm(old.x.e,e))){}
  else if(old&&old.t=='r'&&!old.x&&!e.some(d=>old.e.includes(d))){old.x={e,ln:'',ci:undefined};dirty=true}
  else{grid[k]={t:'r',e,ln:old&&old.t=='r'?old.ln:'',ci:old?old.ci:undefined};dirty=true}}}
 let down=false,lc='',lx=0,ly=0;
-cvs.onpointerdown=e=>{cvs.setPointerCapture(e.pointerId);const[x,y,wx,wy]=cell(e);
+cvs.onpointerdown=e=>{cvs.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,[e.clientX,e.clientY]);if(ptrs.size==2){if(snap&&performance.now()-snapT<500){grid=JSON.parse(snap);dirty=true}snap=null;down=false;pd=0;pinch();return}const[x,y,wx,wy]=cell(e);
  if(mode=='pick'){const c=at(x,y);if(c&&c.t=='s')startRide(x,y);return}
- if(mode=='ride'){transfer(x,y);return}if(mode!='edit')return;down=true;lx=e.clientX;ly=e.clientY;lc=K(x,y);if(tool!='pan')apply(x,y,true,wx,wy)};
-cvs.onpointermove=e=>{const[x,y]=cell(e);hover=[x,y];if(!down)return;
+ if(mode=='ride'){transfer(x,y);return}if(mode!='edit')return;if(e.pointerType=='touch'){snap=JSON.stringify(grid);snapT=performance.now()}down=true;lx=e.clientX;ly=e.clientY;lc=K(x,y);if(tool!='pan')apply(x,y,true,wx,wy)};
+cvs.onpointermove=e=>{if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,[e.clientX,e.clientY]);if(ptrs.size==2){pinch();return}const[x,y]=cell(e);hover=[x,y];if(!down)return;
  if(tool=='pan'){E.ox+=e.clientX-lx;E.oy+=e.clientY-ly;lx=e.clientX;ly=e.clientY}else if(K(x,y)!=lc){lc=K(x,y);apply(x,y,false)}};
-cvs.onpointerup=()=>{if(down)autosave();down=false};cvs.onpointerleave=()=>hover=null;
-cvs.addEventListener('wheel',e=>{e.preventDefault();const f=Math.exp(-e.deltaY*.0012);
+cvs.onpointerup=cvs.onpointercancel=e=>{ptrs.delete(e.pointerId);pd=0;if(down)autosave();down=false};cvs.onpointerleave=()=>hover=null;
+cvs.addEventListener('wheel',e=>{e.preventDefault();const tp=!e.ctrlKey&&mode!='ride'&&(e.deltaX!=0||Math.abs(e.deltaY)<50||!Number.isInteger(e.deltaY));if(tp){E.ox-=e.deltaX;E.oy-=e.deltaY;resize.user=1;return}const f=Math.exp(-e.deltaY*(e.ctrlKey?.01:.0012));
  if(mode=='ride')R.s=Math.min(4,Math.max(.6,R.s*f));else{const r=cvs.getBoundingClientRect();zoomAt(f,e.clientX-r.left,e.clientY-r.top)}},{passive:false});
 function zoomAt(f,px,py){const wx=(px-E.ox)/E.s,wy=(py-E.oy)/E.s;E.s=Math.min(4,Math.max(.1,E.s*f));E.ox=px-wx*E.s;E.oy=py-wy*E.s}
 function fit(all){if(all){const s=Math.min(cw/(W*S),ch/(H*S));E.s=s;E.ox=(cw-W*S*s)/2;E.oy=(ch-H*S*s)/2}else{E.s=Math.min(cw/(30*S),ch/(18*S));E.ox=0;E.oy=0}}
 function resize(){dpr=window.devicePixelRatio||1;const w=$('wrap');cw=w.clientWidth;ch=w.clientHeight;cvs.width=cw*dpr;cvs.height=ch*dpr;if(!resize.done||mode=='edit'&&!resize.user){fit();resize.done=1}}
 addEventListener('resize',()=>{resize.user=0;resize()});
-function setTool(t){tool=t;document.querySelectorAll('[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t==t));if(t=='nm'){$('nm').focus();msg('名前を入力して、駅(駅名)や線路(路線名)をクリック')}}
+function setTool(t){tool=t;drawCP();document.querySelectorAll('[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t==t));if(t=='nm'){$('nm').focus();msg('名前を入力して、駅(駅名)や線路(路線名)をクリック')}}
 document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>setTool(b.dataset.t));
-function rot(){cvi=(cvi+1)%CURVES.length;$('bc').textContent='カーブ '+(cvi+1)+'/'+CURVES.length;setTool('c')}
+function rot(){if(tool=='br'){bri=(bri+1)%BRS.length;drawCP();return}cvi=(cvi+1)%CURVES.length;drawCP();$('bc').textContent='カーブ '+(cvi+1)+'/'+CURVES.length;setTool('c')}
 $('rot').onclick=rot;
 $('zi').onclick=()=>{resize.user=1;zoomAt(1.25,cw/2,ch/2)};$('zo').onclick=()=>{resize.user=1;zoomAt(.8,cw/2,ch/2)};$('zf').onclick=()=>{resize.user=1;fit(true)};
 function setTurn(t){turn=t;$('tl').classList.toggle('on',t<0);$('ts').classList.toggle('on',t==0);$('tr').classList.toggle('on',t>0)}
